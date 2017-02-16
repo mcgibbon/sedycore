@@ -3,6 +3,7 @@ import unittest
 import pytest
 import numpy as np
 
+
 class GetGridTests(unittest.TestCase):
     """
     Test that the relations in Appendix of Taylor et al. 1996 are satisfied.
@@ -14,6 +15,12 @@ class GetGridTests(unittest.TestCase):
     def setUp(self):
         self.x, self.y, self.lmbda, self.theta = get_grid(
             self.n_subfaces_x, self.n_subfaces_y)
+
+    def test_no_nans(self):
+        assert np.all(~np.isnan(self.x))
+        assert np.all(~np.isnan(self.y))
+        assert np.all(~np.isnan(self.lmbda))
+        assert np.all(~np.isnan(self.theta))
 
     def test_first_face_relation_holds(self):
         x = np.tan(self.lmbda[0, :])

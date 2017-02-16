@@ -28,7 +28,10 @@ def get_grid(n_subfaces_x, n_subfaces_y):
         theta[i, :] = np.arctan(y[i, :] * np.cos(lmbda[i, :] - i * np.pi / 2))
 
     lmbda[4:, :] = np.arctan(-1*x[4:, :]/y[4:, :])
+    lmbda[4:, :][y[4:, :] == 0] = 0.
     theta[4:, :] = np.arctan(x[4:, :]/np.sin(lmbda[4:, :])) + np.pi/2
+    invalid_theta = np.sin(lmbda[4:, :]) == 0
+    theta[4:, :][invalid_theta] = np.arctan(-y[4:, :][invalid_theta]/np.cos(lmbda[4:, :][invalid_theta])) + np.pi/2
     # at this point theta goes past pi/2 to the other side of the globe, need to
     # change this to have theta < pi/2 and lon on other side of globe
     lmbda[4:, :][theta[4:, :] > np.pi/2] += np.pi
@@ -80,8 +83,8 @@ def get_taylor_1996_constants(lmbda, theta):
     q[4:, :, :, :, :, 0] = const * np.cos(lmbda[4:, :])
     q[4:, :, :, :, :, 0] = const * np.sin(lmbda[4:, :])
 
-    D = np.empty(list(x.shape) + [2, 2])
-    D_inverse = np.empty(list(x.shape) + [2, 2])
+    D = np.empty(list(lmbda.shape) + [2, 2])
+    D_inverse = np.empty(list(lmbda.shape) + [2, 2])
 
     const = np.cos(theta[:4, :]) * np.cos(lmbda_minus_k_pi_over_2[:4, :])
     D[:4, :, :, :, :, 0, 0] = const * np.cos(lmbda_minus_k_pi_over_2)
@@ -109,13 +112,13 @@ def get_taylor_1996_constants(lmbda, theta):
 
     const = 1. / np.sin(theta[4, :])
     D_inverse[4, :, :, :, :, 0, 0] = const * np.cos(lmbda[4, :])
-    D_inverse[4, :, :, :, :, 0, 1] = -1 * const * np.sin(lmbda[4, :]) / np.cos(theta[4, :])
+    D_inverse[4, :, :, :, :, 0, 1] = -1 * const * np.sin(lmbda[4, :]) / np.sin(theta[4, :])
     D_inverse[4, :, :, :, :, 1, 0] = const * np.sin(lmbda[4, :])
     D_inverse[4, :, :, :, :, 1, 1] = const * np.cos(lmbda[4, :]) / np.sin(theta[4, :])
 
     const = 1. / np.sin(-1 * theta[5, :])
     D_inverse[5, :, :, :, :, 0, 0] = const * np.cos(lmbda[5, :])
-    D_inverse[5, :, :, :, :, 0, 1] = -1 * const * np.sin(lmbda[5, :]) / np.cos(-1 * theta[5, :])
+    D_inverse[5, :, :, :, :, 0, 1] = -1 * const * np.sin(lmbda[5, :]) / np.sin(-1 * theta[5, :])
     D_inverse[5, :, :, :, :, 1, 0] = const * np.sin(lmbda[5, :])
     D_inverse[5, :, :, :, :, 1, 1] = const * np.cos(lmbda[5, :]) / np.sin(-1 * theta[5, :])
 
