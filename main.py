@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sympl import Prognostic
 
 n_subfaces_x = 5
 n_subfaces_y = 5
@@ -125,14 +126,32 @@ def get_taylor_1996_constants(lmbda, theta):
     return p, q, D, D_inverse
 
 
-if __name__ == '__main__':
-    x, y, lmbda, theta = get_grid(
-        n_subfaces_x, n_subfaces_y)
+class SpectralElementAdvection(Prognostic):
 
-    legendre_lobatto_points = np.array(
-        [-1., -(3. / 7) ** 0.5, 0, (3. / 7) ** 0.5, 1.])
-    x_leg = legendre_lobatto_points
+    def __init__(self, longitude_radians, latitude_radians):
+        self.lmbda, self.theta = longitude_radians, latitude_radians
 
+        # compute and cache constants once to reduce computational cost
+        self.p, self.q, self.D, self.D_inverse = get_taylor_1996_constants(
+            self.lmbda, self.theta)
+        legendre_derivative = get_legendre_derivative_matrix()
+        real_to_computational, computational_to_real = get_transformation_matrices()
+        self.derivative_matrix = np.dot(
+            np.dot(computational_to_real, legendre_derivative),
+            real_to_computational)
+        rotate_90_degrees = np.array(
+            [[0, -1],
+             [1, 0]])
+        self.DT_D = np.dot(self.D.transpose(), self.D)
+        self.Dinv_Rot_D = np.dot(np.dot(self.D_inverse, rotate_90_degrees), self.D)
+        self.Dinv_DinvT = np.dot(self.D_inverse, self.D_inverse.transpose())
+        self.Dinv_Rot_D_derivative = np.dot(self.Dinv_Rot_D, self.derivative_matrix)
+
+    def __call__(self, state):
+        pass
+
+
+def get_legendre_derivative_matrix():
     N = 5
     legendre_derivative = np.empty([N, N])
     for i in range(N):
@@ -145,7 +164,11 @@ if __name__ == '__main__':
                 legendre_derivative[i, j] = 0.
             else:
                 legendre_derivative[i, j] = P4(x_leg[i]) / (P4(x_leg[j]) * (x_leg[i] - x_leg[j]))
+    return legendre_derivative
 
+
+def get_transformation_matrices():
+    N = 5
     legendre_basis_functions = [P0, P1, P2, P3, P4]
     real_to_computational = np.empty([N, N])
     computational_to_real = np.empty([N, N])
@@ -154,9 +177,18 @@ if __name__ == '__main__':
         for i in range(N):
             real_to_computational[i, j] = legendre_basis_functions[i](x_leg[j])*wj*(2*i + 1)/2.
             computational_to_real[i, j] = legendre_basis_functions[j](x_leg[i])
+    return real_to_computational, computational_to_real
+
+
+if __name__ == '__main__':
+    x, y, lmbda, theta = get_grid(
+        n_subfaces_x, n_subfaces_y)
+
+    legendre_lobatto_points = np.array(
+        [-1., -(3. / 7) ** 0.5, 0, (3. / 7) ** 0.5, 1.])
+    x_leg = legendre_lobatto_points
 
     p, q, D, D_inverse = get_taylor_1996_constants(lmbda, theta)
-
 
     plt.figure()
     for i in range(6):
