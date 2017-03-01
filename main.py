@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sympl import Prognostic
+import sympl
 
 n_subfaces_x = 5
 n_subfaces_y = 5
@@ -63,7 +63,7 @@ def P4(x):
 
 
 def get_taylor_1996_constants(lmbda, theta):
-    # these are the p and q vectors in the appendix of Taylor et al. 1996.
+    # these are the p and q vectors in the appendix of Taylor et al. 1997.
     p = np.empty(list(lmbda.shape) + [2], dtype=lmbda.dtype)
     q = np.empty(list(lmbda.shape) + [2], dtype=lmbda.dtype)
 
@@ -126,7 +126,7 @@ def get_taylor_1996_constants(lmbda, theta):
     return p, q, D, D_inverse
 
 
-class SpectralElementAdvection(Prognostic):
+class SpectralElementAdvection(sympl.Prognostic):
 
     def __init__(self, longitude_radians, latitude_radians):
         self.lmbda, self.theta = longitude_radians, latitude_radians
@@ -146,9 +146,55 @@ class SpectralElementAdvection(Prognostic):
         self.Dinv_Rot_D = np.dot(np.dot(self.D_inverse, rotate_90_degrees), self.D)
         self.Dinv_DinvT = np.dot(self.D_inverse, self.D_inverse.transpose())
         self.Dinv_Rot_D_derivative = np.dot(self.Dinv_Rot_D, self.derivative_matrix)
+        self.coriolis_frequency = 2*Omega*np.sin(latitude_radians)
 
     def __call__(self, state):
-        pass
+        v1 = state['x_wind'].values
+        v2 = state['y_wind'].values
+        h = state['fluid_depth'].values
+        n_subfaces = v1.shape[0]*v1.shape[1]*v1.shape[2]
+        target_shape = [n_subfaces] + list(v1.shape[3:])
+        v1, v2, h = v1.reshape(target_shape), v2.reshape(target_shape), h.reshape(target_shape)
+        k_cross_v = np.empty(target_shape + [2])
+        k_cross_v[:, :, :, 0] = np.einsum(
+                'ipqjkl,ipqjkl->ipqjk',
+                self.Dinv_Rot_D[:, :, :, :, 0], v1[:, :, :, None])
+        k_cross_v[:, :, :, 1] = np.einsum(
+                'ipqjkl,ipqjkl->ipqjk',
+                self.Dinv_Rot_D[:, :, :, :, 1], v2[:, :, :, None])
+        vorticity = -1 * (
+            np.einsum(
+                'jm,ipqjk->ipqmk', self.derivative_matrix, k_cross_v[:, :, :, 0]) +
+            np.einsum(
+                'km,ipqjk->ipqjm', self.derivative_matrix, k_cross_v[:, :, :, 1])
+        ) + self.q[:, :, :, :, :, 0]*v1 + self.q[:, :, :, :, :, 1]*v2
+        phi = 0.5 * (
+            self.DT_D[:, :, :, :, :, 0, 0]*v1**2 +
+            (self.DT_D[:, :, :, :, :, 1, 0] + self.DT_D[:, :, :, :, :, 0, 1])*v1*v2 +
+            self.DT_D[:, :, :, :, :, 1, 1]*v2**2) + g*h
+        phi_x = np.einsum(
+            'jm,ipqjk->ipqmk', self.derivative_matrix, phi)
+        phi_y = np.einsum(
+            'km,ipqjk->ipqjm', self.derivative_matrix, phi)
+        dh_dt = -1 * (
+            np.einsum(
+                'jm,ipqjk->ipqmk', self.derivative_matrix, h*v1) +
+            np.einsum(
+                'km,ipqjk->ipqjm', self.derivative_matrix, h*v2)
+            ) - p[:, :, :, :, :, 0]*h*v1 - p[:, :, :, :, :, 1]*h*v2
+        dv1_dt = -(vorticity + self.coriolis_frequency) * (
+            self.Dinv_Rot_D[:, :, :, :, :, 0, 0] * v1 +
+            self.Dinv_Rot_D[:, :, :, :, :, 0, 1] * v2) - (
+            self.Dinv_DinvT[:, :, :, :, :, 0, 0] * phi_x +
+            self.Dinv_DinvT[:, :, :, :, :, 0, 1] * phi_y
+        )
+        dv2_dt = -(vorticity + self.coriolis_frequency) * (
+            self.Dinv_Rot_D[:, :, :, :, :, 1, 0] * v1 +
+            self.Dinv_Rot_D[:, :, :, :, :, 1, 1] * v2) - (
+            self.Dinv_DinvT[:, :, :, :, :, 1, 0] * phi_x +
+            self.Dinv_DinvT[:, :, :, :, :, 1, 1] * phi_y
+        )
+
 
 
 def get_legendre_derivative_matrix():
