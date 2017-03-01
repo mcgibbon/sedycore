@@ -129,6 +129,8 @@ def get_taylor_1996_constants(lmbda, theta):
 class SpectralElementAdvection(sympl.Prognostic):
 
     def __init__(self, longitude_radians, latitude_radians):
+        Omega = sympl.default_constants[
+            'planetary_rotation_rate'].to_units('s^-1').values.item()
         self.lmbda, self.theta = longitude_radians, latitude_radians
 
         # compute and cache constants once to reduce computational cost
@@ -146,7 +148,7 @@ class SpectralElementAdvection(sympl.Prognostic):
         self.Dinv_Rot_D = np.dot(np.dot(self.D_inverse, rotate_90_degrees), self.D)
         self.Dinv_DinvT = np.dot(self.D_inverse, self.D_inverse.transpose())
         self.Dinv_Rot_D_derivative = np.dot(self.Dinv_Rot_D, self.derivative_matrix)
-        self.coriolis_frequency = 2*Omega*np.sin(latitude_radians)
+        self.coriolis_frequency = 2*Omega*np.sin(self.theta)
 
     def __call__(self, state):
         v1 = state['x_wind'].values
